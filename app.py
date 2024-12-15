@@ -6,26 +6,22 @@ def score_endurance_event(
     distance_km: float,
     elevation_meters: float,
     event_type: str = "run",
-    is_draftable: bool = False,
+    roughness: float = 0.0,
+    draft_percentage: float = 0.0,  # Changed to percentage
     temperature_c: float = 20.0,
     avg_altitude_m: float = 0.0
 ) -> float:
     """Calculate normalized grit points for endurance events"""
-    DISTANCE_FACTOR = 4.0
-    ELEVATION_FACTOR = 6.0
+    DISTANCE_FACTOR = 3.0
+    ELEVATION_FACTOR = 4.0
     
-    TERRAIN_FACTORS = {
-        "run": 1.0,
-        "trail_run": 1.4,
-        "road_cycle": 1.0,
-        "gravel": 1.2,
-        "mtb": 1.4
-    }
+    terrain_factor = 1 + roughness
     
-    DRAFT_FACTOR = 0.8 if is_draftable else 1.0
+    # Calculate draft factor based on percentage (0% = 1.0, 100% = 0.7)
+    DRAFT_FACTOR = 1.0 - (draft_percentage / 100 * 0.3)
+    
     NORMALIZATION_FACTOR = 2.0 / 42.2
-    
-    # Handle elevation with increased impact (400 = 1 point for running)
+
     if event_type in ["run", "trail_run"]:
         elevation_score = elevation_meters / 400
         base_score = distance_km * NORMALIZATION_FACTOR + elevation_score
@@ -35,26 +31,22 @@ def score_endurance_event(
         elevation_score = elevation_meters / 400
         base_score = distance_km * NORMALIZATION_FACTOR + elevation_score
     
-    # Calculate temperature adjustment - sliding scale
-    # Optimal temperature range: 10-20°C
-    # Below 10°C: small penalty
-    # Above 20°C: increasing difficulty
+    # Temperature adjustment
     if temperature_c <= 10:
-        temp_adjustment = (temperature_c - 10) * 0.05  # Small penalty for cold
+        temp_adjustment = (temperature_c - 10) * 0.05
     elif temperature_c <= 20:
-        temp_adjustment = 0  # Optimal range
+        temp_adjustment = 0
     else:
-        temp_adjustment = (temperature_c - 20) * 0.1  # Gradual increase above 20°C
+        temp_adjustment = (temperature_c - 20) * 0.1
     
-    # Calculate altitude adjustment - sliding scale starting from sea level
-    # Progressive difficulty increase with altitude
+    # Altitude adjustment
     if avg_altitude_m < 500:
-        altitude_adjustment = (avg_altitude_m / 1000) * 0.8  # Slightly less than 1 point per 1000m
+        altitude_adjustment = (avg_altitude_m / 1000) * 0.8
     else:
         altitude_adjustment = 0
     
     # Apply all factors
-    terrain_adjusted = base_score * TERRAIN_FACTORS[event_type]
+    terrain_adjusted = base_score * terrain_factor
     draft_adjusted = terrain_adjusted * DRAFT_FACTOR
     final_score = draft_adjusted + temp_adjustment + altitude_adjustment
     
@@ -91,15 +83,33 @@ with col1:
         distance = st.number_input("Distance (km)", min_value=0.0, value=42.2)
         elevation = st.number_input("Elevation Gain (meters)", min_value=0.0, value=0.0)
         
-        # New inputs for temperature and altitude
+        # Roughness slider
+        roughness = st.slider(
+            "Terrain Roughness (0 = smooth, 1 = extreme chonk)",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.0,
+            step=0.1,
+            help="0 = road/track, 1.0 = extreme technical terrain"
+        )
+        
+        # New draft percentage slider
+        draft_percentage = st.slider(
+            "Drafting Percentage",
+            min_value=0.0,
+            max_value=100.0,
+            value=0.0,
+            step=5.0,
+            help="0% = solo riding, 100% = full draft benefit"
+        )
+        
+        # Temperature and altitude
         temperature = st.number_input("Average Temperature (°C)", min_value=-20.0, max_value=50.0, value=20.0)
         altitude = st.number_input("Average Altitude (meters)", min_value=0.0, max_value=5000.0, value=0.0)
         
-        is_draftable = st.checkbox("Is this a draftable event?")
-        
         submitted = st.form_submit_button("Calculate Grit Points")
 
-# Initialize session state for storing events
+# Initialize session state
 if 'events' not in st.session_state:
     st.session_state.events = []
 
@@ -109,7 +119,8 @@ if submitted:
         distance,
         elevation,
         event_type,
-        is_draftable,
+        roughness,
+        draft_percentage,
         temperature,
         altitude
     )
@@ -119,9 +130,10 @@ if submitted:
         'type': event_type,
         'distance': distance,
         'elevation': elevation,
+        'roughness': roughness,
+        'draft_pct': draft_percentage,
         'temp': temperature,
         'altitude': altitude,
-        'draftable': is_draftable,
         'score': score
     }
     
@@ -140,6 +152,8 @@ with col2:
             df.style.format({
                 'distance': '{:.1f}',
                 'elevation': '{:.0f}',
+                'roughness': '{:.1f}',
+                'draft_pct': '{:.0f}',
                 'temp': '{:.1f}',
                 'altitude': '{:.0f}',
                 'score': '{:.2f}'
@@ -147,7 +161,7 @@ with col2:
             hide_index=True
         )
         
-        # Create bar chart of scores
+        # Create bar chart
         fig = px.bar(
             df,
             x='name',
@@ -168,13 +182,17 @@ st.markdown("""
 ---
 ### Scoring System:
 - Base: Marathon (42.2km) = 2.0 grit points
-- Elevation: +1 point per 400m gain with a 6:1 running:cycling ratio
+- Distance: 3:1 ratio running:cycling
+- Elevation: +1 point per 400m gain with a 4:1 running:cycling ratio
+- Terrain Roughness: 0-1 scale e.g.
+  - 0.0 = smooth surface (1x multiplier)
+  - 1.0 = 100% off road, extreme technical terrain (2x multiplier)
+- Drafting: 0-100% scale
+  - 0% = solo effort (1.0x multiplier)
+  - 100% = full draft benefit (0.7x multiplier)
 - Temperature adjustments:
   - 10-20°C: Optimal range (no adjustment)
   - Below 10°C: -0.05 points per °C below 10°C
   - Above 20°C: +0.1 points per °C above 20°C
 - Altitude: +0.8 points per 1000m above sea level (0 if < 500m)
-- Trail/MTB: 1.4x multiplier
-- Gravel: 1.2x multiplier
-- Drafting: 0.8x multiplier
 """)
