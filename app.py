@@ -7,11 +7,19 @@ def score_endurance_event(
     elevation_meters: float,
     event_type: str = "run",
     roughness: float = 0.0,
-    draft_percentage: float = 0.0,  # Changed to percentage
+    draft_percentage: float = 0.0,
     temperature_c: float = 20.0,
     avg_altitude_m: float = 0.0
 ) -> float:
     """Calculate normalized grit points for endurance events"""
+    # Check minimum distances
+    MIN_RUN_DISTANCE = 21.2  # Half marathon
+    MIN_CYCLE_DISTANCE = 70.0
+    
+    if (event_type in ["run", "trail_run"] and distance_km < MIN_RUN_DISTANCE) or \
+       (event_type in ["road_cycle", "gravel", "mtb"] and distance_km < MIN_CYCLE_DISTANCE):
+        return 0.0
+    
     DISTANCE_FACTOR = 3.0
     ELEVATION_FACTOR = 4.0
     
@@ -181,6 +189,10 @@ with col2:
 st.markdown("""
 ---
 ### Scoring System:
+- Minimum distances required:
+  - Running events: 21.2km (half marathon)
+  - Cycling events: 80km
+  - Events below these distances score 0 points
 - Base: Marathon (42.2km) = 2.0 grit points
 - Distance: 3:1 ratio running:cycling
 - Elevation: +1 point per 400m gain with a 4:1 running:cycling ratio
