@@ -25,14 +25,14 @@ def score_endurance_event(
     DRAFT_FACTOR = 0.8 if is_draftable else 1.0
     NORMALIZATION_FACTOR = 2.0 / 42.2
     
-    # Handle elevation with increased impact (300m = 1 point for running)
+    # Handle elevation with increased impact (400 = 1 point for running)
     if event_type in ["run", "trail_run"]:
-        elevation_score = elevation_meters / 300
+        elevation_score = elevation_meters / 400
         base_score = distance_km * NORMALIZATION_FACTOR + elevation_score
     else:
         distance_km = distance_km / DISTANCE_FACTOR
         elevation_meters = elevation_meters / ELEVATION_FACTOR
-        elevation_score = elevation_meters / 300
+        elevation_score = elevation_meters / 400
         base_score = distance_km * NORMALIZATION_FACTOR + elevation_score
     
     # Calculate temperature adjustment - sliding scale
@@ -168,7 +168,7 @@ st.markdown("""
 ---
 ### Scoring System:
 - Base: Marathon (42.2km) = 2.0 grit points
-- Elevation: +1 point per 300m gain
+- Elevation: +1 point per 400m gain with a 6:1 running:cycling ratio
 - Temperature adjustments:
   - 10-20°C: Optimal range (no adjustment)
   - Below 10°C: -0.05 points per °C below 10°C
